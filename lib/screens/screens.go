@@ -3,12 +3,13 @@ package screens
 import (
     "fmt"
     "github.com/BurntSushi/xgb"
+    "github.com/BurntSushi/xgb/xproto"
     "github.com/BurntSushi/xgb/xinerama"
 )
 
 type Geometry struct {
-    X, Y int16
-    W, H uint16
+    X, Y int32
+    W, H int32
 }
 
 type InvalidIdError uint
@@ -32,7 +33,8 @@ func Load(c *xgb.Conn) error {
 
     count = reply.Number
     for _, scr := range reply.ScreenInfo {
-        sizes = append(sizes, Geometry{scr.XOrg, scr.YOrg, scr.Width, scr.Height})
+        sizes = append(sizes, Geometry{int32(scr.XOrg),  int32(scr.YOrg),
+                                       int32(scr.Width), int32(scr.Height)})
     }
     return nil
 }
@@ -41,8 +43,28 @@ func Count() uint32 {
     return count
 }
 
-func Focused() uint32 {
-    /* TODO */
+func Focused(c *xgb.Conn) uint32 {
+    incookie := xproto.GetInputFocus(c)
+    rep, err := incookie.Reply()
+    if err != nil {
+        return 0
+    }
+    win := rep.Focus
+
+    trcookie := xproto.TranslateCoordinates(c, win,
+                                            xproto.Setup(c).DefaultScreen(c).Root,
+                                            0, 0)
+    att, err := trcookie.Reply()
+    if err != nil {
+        return 0
+    }
+    x,y := int32(att.DstX), int32(att.DstY)
+
+    for i, size := range sizes {
+        if size.X <= x && size.X + size.W >= x && size.Y <= y && size.Y + size.H >= y {
+            return uint32(i)
+        }
+    }
     return 0
 }
 
