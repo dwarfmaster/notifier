@@ -2,9 +2,10 @@ package main
 
 import (
     "fmt"
-    "os"
+    "github.com/BurntSushi/xgb"
+
     "github.com/lucas8/notifier/lib/config"
-    "code.google.com/p/x-go-binding/xgb"
+    "github.com/lucas8/notifier/lib/screens"
 )
 
 func main() {
@@ -21,13 +22,22 @@ func main() {
     /* Opening the connection */
     var conn *xgb.Conn
     {
-        c, err := xgb.Dial(os.Getenv("DISPLAY"))
+        c, err := xgb.NewConn()
         if err != nil {
             fmt.Printf("Error when connecting to x11 server : %v\n", err)
             return
         }
         conn = c
         defer conn.Close()
+    }
+
+    /* Loading screens configuration */
+    {
+        err := screens.Load(conn)
+        if err != nil {
+            fmt.Printf("Error while getting screens configuration : %s\n", err)
+            return
+        }
     }
 
     /* TODO */
