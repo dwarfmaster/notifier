@@ -6,6 +6,7 @@ import (
 
     "github.com/lucas8/notifier/lib/config"
     "github.com/lucas8/notifier/lib/screens"
+    "github.com/lucas8/notifier/lib/window"
 )
 
 func main() {
@@ -35,7 +36,16 @@ func main() {
     {
         err := screens.Load(conn)
         if err != nil {
-            fmt.Printf("Error while getting screens configuration : %s\n", err)
+            fmt.Printf("Error while getting screens configuration : %v\n", err)
+            return
+        }
+    }
+
+    /* Loading window manager */
+    {
+        err := window.Load(conn)
+        if err != nil {
+            fmt.Printf("Error while loading window manager : %v\n", err)
             return
         }
     }
