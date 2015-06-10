@@ -265,11 +265,13 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
     }
     {
         cl, e := config.String(name + ".gc.bc")
-        if e != nil {
+        if e == nil {
             values[0], e = openColor(c, scr, readColor(cl))
             if e != nil {
                 return e
             }
+        } else {
+            values[0] = defaultgc.bc
         }
     }
     values[1] = values[0]
