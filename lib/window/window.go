@@ -1,4 +1,6 @@
 package window
+/* TODO EWMH support */
+/* TODO ICCCM support */
 
 import (
     "fmt"
@@ -18,6 +20,7 @@ type color struct {
 type gcontextdata struct {
     fg, bg, bc uint32
     width uint32
+    border uint32
     font uint32
 }
 var defaultgc gcontextdata
@@ -26,19 +29,22 @@ type gcontext struct {
     fg, bg, bc xproto.Gcontext
     font xproto.Font
     width uint32
+    border uint32
     fontHeight uint32
 }
 var ctxs map[string]*gcontext
 
 type Window struct {
-    next *Window
-    prev *Window
+    id xproto.Window
+    conn *xgb.Conn
+    lines []string
+    gc *gcontext
+    height uint32
 }
-var root *Window
 
 type InvalidConfig string
 func (e InvalidConfig) Error() string {
-    return fmt.Sprintf("Bad confguration : %v", string(e))
+    return fmt.Sprintf("Bad configuration : %v", string(e))
 }
 
 func charValue(c byte) uint8 {
@@ -117,11 +123,18 @@ func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) {
     fnt, _ := openFont(c, font)
     defaultgc.font = uint32(fnt)
 
-    if config.Has("global.gc.width") {
-        wd, _ := config.Int("global.gc.width")
+    if config.Has("global.width") {
+        wd, _ := config.Int("global.width")
         defaultgc.width = uint32(wd)
     } else {
-        defaultgc.width = 5
+        defaultgc.width = 500
+    }
+
+    if config.Has("global.gc.width") {
+        wd, _ := config.Int("global.gc.width")
+        defaultgc.border = uint32(wd)
+    } else {
+        defaultgc.border = 5
     }
 
     var cl color
@@ -154,7 +167,7 @@ func defaultGCValues(c *xgb.Conn) []uint32 {
     values := make([]uint32, 4)
     values[0] = defaultgc.fg
     values[1] = defaultgc.bg
-    values[2] = defaultgc.width
+    values[2] = defaultgc.border
     values[3] = defaultgc.font
     return values
 }
@@ -195,6 +208,7 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
     }
     gc.fg = id
     gc.font = xproto.Font(values[3])
+    gc.border = values[2]
 
     /* Query the font height */
     {
@@ -233,6 +247,16 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
     }
     gc.bc = id
 
+    /* Width */
+    {
+        wd, e := config.Int(name + ".width")
+        if e == nil {
+            gc.width = uint32(wd)
+        } else {
+            gc.width = defaultgc.width
+        }
+    }
+
     ctxs[name] = &gc
     return nil
 }
@@ -262,8 +286,6 @@ func Load(c *xgb.Conn) error {
     if err != nil {
         return err
     }
-
-    /* TODO */
     return nil
 }
 
@@ -273,11 +295,140 @@ func Has(name string) bool {
 }
 
 func (w *Window) Close() {
-    /* TODO */
+    xproto.DestroyWindow(w.conn, w.id)
 }
 
-func Open(c *xgb.Conn, gc, title, text string) (*Window, error) {
-    /* TODO */
-    return nil, nil
+func (w *Window) Move(x uint32, y uint32) {
+    var mask uint16 = xproto.ConfigWindowX | xproto.ConfigWindowY
+    values := make([]uint32, 2)
+    values[0] = x
+    values[1] = y
+    xproto.ConfigureWindow(w.conn, w.id, mask, values)
+}
+
+type _word struct {
+    wd string
+    length uint32
+    cookie xproto.QueryTextExtentsCookie
+}
+
+func prepString(str string) ([]xproto.Char2b, uint16) {
+    ln := uint16(len(str))
+    var ch2b []xproto.Char2b = make([]xproto.Char2b, ln)
+    for i := uint16(0); i < ln; i++ {
+        ch2b[i].Byte1 = str[i]
+        ch2b[i].Byte2 = 0
+    }
+    return ch2b, ln
+}
+
+func cutLines(c *xgb.Conn, w uint32, font xproto.Font, text string) []string {
+    wds := strings.Split(text, " ")
+    var words []_word = make([]_word, len(wds))
+    for i, word := range wds {
+        words[i].wd     = word + " "
+        words[i].length = 0
+        ch2dstr, ln := prepString(words[i].wd)
+        words[i].cookie = xproto.QueryTextExtents(c, xproto.Fontable(font), ch2dstr, ln)
+    }
+
+    var lines []string = make([]string, 0, 10)
+    var line string    = ""
+    var ln uint32      = 0
+    for i := 0; i < len(words); i++ {
+        rep, _ := words[i].cookie.Reply()
+        words[i].length = uint32(rep.OverallWidth)
+        ln += words[i].length
+        if ln >= w {
+            lines = append(lines, line)
+            line = ""
+            ln = words[i].length
+        }
+        line += words[i].wd
+    }
+    if ln != 0 {
+        lines = append(lines, line)
+    }
+
+    return lines
+}
+
+type BadContextError string
+func (e BadContextError) Error() string {
+    return fmt.Sprintf("Can't open notification with inexistant context : %s", string(e))
+}
+
+func Open(c *xgb.Conn, ctx, title, text string) (*Window, error) {
+    gc, ok := ctxs[ctx]
+    if !ok {
+        return nil, BadContextError(ctx)
+    }
+
+    scr := xproto.Setup(c).DefaultScreen(c)
+    wdwid, err := xproto.NewWindowId(c)
+    if err != nil {
+        return nil, err
+    }
+
+    lines := cutLines(c, gc.width - 2*gc.border, gc.font, title + " " + text)
+    height := uint32(len(lines)) * gc.fontHeight
+
+    var mask uint32 = xproto.CwBackPixel | xproto.CwOverrideRedirect | xproto.CwEventMask
+    values := make([]uint32, 3)
+    values[0] = scr.WhitePixel
+    values[1] = 1
+    values[2] = xproto.EventMaskExposure
+    err = xproto.CreateWindowChecked(c, xproto.WindowClassCopyFromParent, wdwid, scr.Root,
+                                     0, 0, uint16(gc.width), uint16(height + 2*gc.border), 1,
+                                     xproto.WindowClassInputOutput, scr.RootVisual,
+                                     mask, values).Check()
+    if err != nil {
+        return nil, err
+    }
+    xproto.ChangeProperty(c, xproto.PropModeReplace, wdwid,
+                          xproto.AtomWmName, xproto.AtomString,
+                          8, uint32(len(title)), []byte(title))
+    xproto.MapWindow(c, wdwid)
+
+    var wdw Window
+    wdw.id     = wdwid
+    wdw.conn   = c
+    wdw.lines  = lines
+    wdw.gc     = gc
+    wdw.height = height
+    return &wdw, nil
+}
+
+func (w *Window) Redraw() {
+    /* Hide X11 borders */
+    var mask uint16 = xproto.ConfigWindowBorderWidth
+    values := make([]uint32, 1)
+    values[0] = 0
+    xproto.ConfigureWindow(w.conn, w.id, mask, values)
+
+    wdt, hgh := int16(w.gc.width), int16(w.height + 2*w.gc.border)
+    /* Drawing background */
+    bg := xproto.Rectangle{0, 0, uint16(wdt/2), uint16(hgh)}
+    bgs := make([]xproto.Rectangle, 1)
+    bgs[0] = bg
+    xproto.PolyFillRectangle(w.conn, xproto.Drawable(w.id), w.gc.bg, bgs)
+
+    /* Drawing borders */
+    vertices := make([]xproto.Point, 5)
+    vertices[0].X = 0;   vertices[0].Y = 0
+    vertices[1].X = wdt; vertices[1].Y = 0
+    vertices[2].X = wdt; vertices[2].Y = hgh
+    vertices[3].X = 0;   vertices[3].Y = hgh
+    vertices[4].X = 0;   vertices[4].Y = 0
+    xproto.PolyLine(w.conn, xproto.CoordModeOrigin, xproto.Drawable(w.id), w.gc.bc, vertices)
+
+    /* Drawing text */
+    hline := int16(w.gc.fontHeight)
+    x, y := int16(w.gc.border), int16(w.gc.border)
+    for _, line := range w.lines {
+        xproto.ImageText8(w.conn, byte(len(line)), xproto.Drawable(w.id),
+                          w.gc.fg, x, y, line)
+        y += hline
+    }
 }
 
