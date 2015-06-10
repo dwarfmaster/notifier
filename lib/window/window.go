@@ -31,6 +31,7 @@ type gcontext struct {
     width uint32
     border uint32
     fontHeight uint32
+    fontUp uint32
 }
 var ctxs map[string]*gcontext
 
@@ -50,6 +51,8 @@ func (e InvalidConfig) Error() string {
 func charValue(c byte) uint8 {
     if c >= 'A' && c <= 'F' {
         return 10 + c - 'A'
+    } else if c >= 'a' && c <= 'f' {
+        return 10 + c - 'a'
     } else if c >= '0' && c <= '9' {
         return c - '0'
     }
@@ -239,6 +242,7 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
             return e
         }
         gc.fontHeight = uint32(rep.FontAscent) + uint32(rep.FontDescent)
+        gc.fontUp = uint32(rep.FontAscent)
     }
 
     /* Background GC */
@@ -439,7 +443,7 @@ func (w *Window) Redraw() {
 
     wdt, hgh := int16(w.gc.width), int16(w.height + 2*w.gc.border)
     /* Drawing background */
-    bg := xproto.Rectangle{0, 0, uint16(wdt/2), uint16(hgh)}
+    bg := xproto.Rectangle{0, 0, uint16(wdt), uint16(hgh)}
     bgs := make([]xproto.Rectangle, 1)
     bgs[0] = bg
     xproto.PolyFillRectangle(w.conn, xproto.Drawable(w.id), w.gc.bg, bgs)
@@ -455,7 +459,7 @@ func (w *Window) Redraw() {
 
     /* Drawing text */
     hline := int16(w.gc.fontHeight)
-    x, y := int16(w.gc.border), int16(w.gc.border)
+    x, y := int16(w.gc.border), int16(w.gc.border + w.gc.fontUp)
     for _, line := range w.lines {
         xproto.ImageText8(w.conn, byte(len(line)), xproto.Drawable(w.id),
                           w.gc.fg, x, y, line)
