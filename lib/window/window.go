@@ -113,14 +113,17 @@ func openColor(c *xgb.Conn, scr *xproto.ScreenInfo, col color) (uint32, error) {
     return rep.Pixel, nil
 }
 
-func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) {
+func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) error {
     var font string
     if config.Has("global.gc.font") {
         font, _ = config.String("global.gc.font")
     } else {
         font = defaultFont
     }
-    fnt, _ := openFont(c, font)
+    fnt, err := openFont(c, font)
+    if err != nil {
+        return err
+    }
     defaultgc.font = uint32(fnt)
 
     if config.Has("global.width") {
@@ -144,7 +147,10 @@ func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) {
     } else {
         cl = color{255, 255, 255}
     }
-    defaultgc.fg, _ = openColor(c, scr, cl)
+    defaultgc.fg, err = openColor(c, scr, cl)
+    if err != nil {
+        return err
+    }
 
     if config.Has("global.gc.bg") {
         str, _ := config.String("global.gc.bg")
@@ -152,7 +158,10 @@ func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) {
     } else {
         cl = color{0, 0, 0}
     }
-    defaultgc.bg, _ = openColor(c, scr, cl)
+    defaultgc.bg, err = openColor(c, scr, cl)
+    if err != nil {
+        return err
+    }
 
     if config.Has("global.gc.bc") {
         str, _ := config.String("global.gc.bc")
@@ -160,7 +169,11 @@ func loadDefaultGC(c *xgb.Conn, scr *xproto.ScreenInfo) {
     } else {
         cl = color{255, 255, 255}
     }
-    defaultgc.bc, _ = openColor(c, scr, cl)
+    defaultgc.bc, err = openColor(c, scr, cl)
+    if err != nil {
+        return err
+    }
+    return nil
 }
 
 func defaultGCValues(c *xgb.Conn) []uint32 {
@@ -186,11 +199,17 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
     {
         cl, e := config.String(name + ".gc.fg")
         if e == nil {
-            values[0], _ = openColor(c, scr, readColor(cl))
+            values[0], e = openColor(c, scr, readColor(cl))
+            if e != nil {
+                return e
+            }
         }
         cl, e = config.String(name + ".gc.bg")
         if e == nil {
-            values[1], _ = openColor(c, scr, readColor(cl))
+            values[1], e = openColor(c, scr, readColor(cl))
+            if e != nil {
+                return e
+            }
         }
         wd, e := config.Int(name + ".gc.width")
         if e == nil {
@@ -198,7 +217,10 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
         }
         cl, e = config.String(name + ".gc.font")
         if e == nil {
-            fn, _ := openFont(c, cl)
+            fn, e := openFont(c, cl)
+            if e != nil {
+                return e
+            }
             values[3] = uint32(fn)
         }
     }
@@ -212,7 +234,10 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
 
     /* Query the font height */
     {
-        rep, _ := xproto.QueryFont(c, xproto.Fontable(gc.font)).Reply()
+        rep, e := xproto.QueryFont(c, xproto.Fontable(gc.font)).Reply()
+        if e != nil {
+            return e
+        }
         gc.fontHeight = uint32(rep.FontAscent) + uint32(rep.FontDescent)
     }
 
@@ -237,7 +262,10 @@ func loadGC(name string, c *xgb.Conn, scr *xproto.ScreenInfo) error {
     {
         cl, e := config.String(name + ".gc.bc")
         if e != nil {
-            values[0], _ = openColor(c, scr, readColor(cl))
+            values[0], e = openColor(c, scr, readColor(cl))
+            if e != nil {
+                return e
+            }
         }
     }
     values[1] = values[0]
@@ -265,12 +293,15 @@ func loadGCS(c *xgb.Conn, scr *xproto.ScreenInfo) error {
     if !config.Has("global.list") {
         return InvalidConfig("no global.list")
     }
-    loadDefaultGC(c, scr)
+    err := loadDefaultGC(c, scr)
+    if err != nil {
+        return err
+    }
 
     list, _ := config.String("global.list")
     entries := strings.Split(list, ",")
     for _, entry := range entries {
-        err := loadGC(entry, c, scr)
+        err = loadGC(entry, c, scr)
         if err != nil {
             /* TODO Clean previously loaded gcs */
             return err
