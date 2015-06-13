@@ -1,6 +1,7 @@
 package queue
 
 import (
+    "fmt"
     "github.com/BurntSushi/xgb"
 
     "github.com/lucas8/notifier/lib/types"
@@ -182,7 +183,8 @@ func (q *Queue) redraw() {
  * or a fatal error happen (return it)
  */
 func (q *Queue) Run(c chan types.Order) error {
-    for o, ok := <-c; ok; {
+    o, ok := <-c
+    for ok {
         switch ord := o.(type) {
         case types.KillOrder:
             return nil
@@ -200,6 +202,7 @@ func (q *Queue) Run(c chan types.Order) error {
         case types.RedrawOrder:
             q.redraw()
         }
+        o, ok = <-c
     }
     return ClosedChannelError{}
 }
