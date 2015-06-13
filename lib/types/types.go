@@ -16,6 +16,8 @@ type NotifOrder struct {
     Text  string
 }
 
+type RedrawOrder struct {}
+
 type Geometry struct {
     X, Y int32
     W, H int32
