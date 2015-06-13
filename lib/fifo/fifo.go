@@ -18,7 +18,11 @@ type Command interface {
 
 type fdReader int
 func (fdr fdReader) Read(p []byte) (int, error) {
-    return syscall.Read(int(fdr), p)
+    n, e := syscall.Read(int(fdr), p)
+    if n < 0 {
+        n = 0
+    }
+    return n, e
 }
 
 type Fifo struct {
@@ -53,7 +57,7 @@ func Open() (*Fifo, error) {
 
     pipe.fd   = fdReader(fd)
     pipe.rd   = bufio.NewReader(pipe.fd)
-    pipe.cmds = make([]Command, 5)
+    pipe.cmds = make([]Command, 0, 5)
     return &pipe, nil
 }
 
