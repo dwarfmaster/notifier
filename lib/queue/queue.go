@@ -1,7 +1,6 @@
 package queue
 
 import (
-    "fmt"
     "github.com/BurntSushi/xgb"
 
     "github.com/lucas8/notifier/lib/types"
@@ -122,6 +121,10 @@ func (q *Queue) updatePos(scr int) {
 }
 
 func (q *Queue) closeNotif(n *notif) {
+    if n == nil {
+        return
+    }
+
     if n.prev != nil {
         n.prev.next = n.next
     }
@@ -168,6 +171,7 @@ func (q *Queue) openNotif(lvl, txt string, time uint32) {
         p.next = &not
         not.prev = p
     }
+    q.updatePos(int(scr))
 }
 
 func (q *Queue) redraw() {
