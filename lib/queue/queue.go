@@ -110,13 +110,14 @@ func (q *Queue) updatePos(scr int) {
                 xm = g.W - gn.W - int32(q.vertPad)
                 ym = g.H - y - gn.H
             }
-            not.win.Move(uint32(xm), uint32(ym))
+            not.win.Move(uint32(g.X + xm), uint32(g.Y + ym))
             if !not.onScreen {
                 not.win.Map()
                 not.onScreen = true
             }
         }
         y = yn
+        not = not.next
     }
 }
 
