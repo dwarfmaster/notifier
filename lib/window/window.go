@@ -425,7 +425,6 @@ func Open(c *xgb.Conn, ctx, title, text string) (*Window, error) {
     xproto.ChangeProperty(c, xproto.PropModeReplace, wdwid,
                           xproto.AtomWmName, xproto.AtomString,
                           8, uint32(len(title)), []byte(title))
-    xproto.MapWindow(c, wdwid)
 
     var wdw Window
     wdw.id     = wdwid
@@ -434,6 +433,10 @@ func Open(c *xgb.Conn, ctx, title, text string) (*Window, error) {
     wdw.gc     = gc
     wdw.height = height
     return &wdw, nil
+}
+
+func (w* Window) Map() {
+    xproto.MapWindow(w.conn, w.id)
 }
 
 func (w *Window) Redraw() {

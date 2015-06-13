@@ -5,12 +5,9 @@ import (
     "github.com/BurntSushi/xgb"
     "github.com/BurntSushi/xgb/xproto"
     "github.com/BurntSushi/xgb/xinerama"
-)
 
-type Geometry struct {
-    X, Y int32
-    W, H int32
-}
+    "github.com/lucas8/notifier/lib/types"
+)
 
 type InvalidIdError uint
 func (e InvalidIdError) Error() string {
@@ -18,7 +15,7 @@ func (e InvalidIdError) Error() string {
 }
 
 var count uint32
-var sizes []Geometry;
+var sizes []types.Geometry;
 
 func Load(c *xgb.Conn) error {
     err := xinerama.Init(c)
@@ -33,8 +30,8 @@ func Load(c *xgb.Conn) error {
 
     count = reply.Number
     for _, scr := range reply.ScreenInfo {
-        sizes = append(sizes, Geometry{int32(scr.XOrg),  int32(scr.YOrg),
-                                       int32(scr.Width), int32(scr.Height)})
+        sizes = append(sizes, types.Geometry{int32(scr.XOrg),  int32(scr.YOrg),
+                                             int32(scr.Width), int32(scr.Height)})
     }
     return nil
 }
@@ -68,9 +65,9 @@ func Focused(c *xgb.Conn) uint32 {
     return 0
 }
 
-func Geom(id uint32) (Geometry, error) {
+func Geom(id uint32) (types.Geometry, error) {
     if id >= count {
-        return Geometry{0, 0, 0, 0}, InvalidIdError(id)
+        return types.Geometry{0, 0, 0, 0}, InvalidIdError(id)
     }
     return sizes[id], nil
 }
