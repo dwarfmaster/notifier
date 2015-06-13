@@ -6,18 +6,14 @@ import (
     "bufio"
 
     "github.com/lucas8/notifier/lib/config"
+    "github.com/lucas8/notifier/lib/order"
 )
 
 const defaultPath = "/tmp/xcbnotif.fifo"
 
-type Order interface {
-    Id() uint32
-    Data() []string
-}
-
 type Command interface {
     Validate(string) bool
-    Get() Order
+    Get() order.Order
 }
 
 type fdReader int
@@ -70,7 +66,7 @@ func (pipe *Fifo) AddCmd(cmd Command) {
     pipe.cmds = append(pipe.cmds, cmd)
 }
 
-func (pipe *Fifo) ReadOrders(c chan Order) {
+func (pipe *Fifo) ReadOrders(c chan order.Order) {
     for {
         line, err := pipe.rd.ReadString('\n')
         if err != nil || len(line) == 0 {
