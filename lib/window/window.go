@@ -9,6 +9,7 @@ import (
     "github.com/BurntSushi/xgb/xproto"
 
     "github.com/lucas8/notifier/lib/config"
+    "github.com/lucas8/notifier/lib/types"
 )
 
 const defaultFont = "-*-terminal-medium-r-*-*-14-*-*-*-*-*-iso8859-*"
@@ -40,7 +41,7 @@ type Window struct {
     conn *xgb.Conn
     lines []string
     gc *gcontext
-    height uint32
+    Height uint32
 }
 
 type InvalidConfig string
@@ -431,7 +432,7 @@ func Open(c *xgb.Conn, ctx, title, text string) (*Window, error) {
     wdw.conn   = c
     wdw.lines  = lines
     wdw.gc     = gc
-    wdw.height = height
+    wdw.Height = height
     return &wdw, nil
 }
 
@@ -446,7 +447,7 @@ func (w *Window) Redraw() {
     values[0] = 0
     xproto.ConfigureWindow(w.conn, w.id, mask, values)
 
-    wdt, hgh := int16(w.gc.width), int16(w.height + 2*w.gc.border)
+    wdt, hgh := int16(w.gc.width), int16(w.Height + 2*w.gc.border)
     /* Drawing background */
     bg := xproto.Rectangle{0, 0, uint16(wdt), uint16(hgh)}
     bgs := make([]xproto.Rectangle, 1)
@@ -470,5 +471,13 @@ func (w *Window) Redraw() {
                           w.gc.fg, x, y, line)
         y += hline
     }
+}
+
+func (w *Window) Geom() types.Geometry {
+    rep, err := xproto.GetGeometry(w.conn, xproto.Drawable(w.id)).Reply()
+    if err != nil {
+        return types.Geometry{0, 0, 0, 0}
+    }
+    return types.Geometry{int32(rep.X), int32(rep.Y), int32(rep.Width), int32(rep.Height)}
 }
 
