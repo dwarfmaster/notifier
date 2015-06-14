@@ -408,7 +408,7 @@ func Open(c *xgb.Conn, ctx, title, text string) (*Window, error) {
         return nil, err
     }
 
-    lines := cutLines(c, gc.width - 2*gc.border, gc.font, title + " " + text)
+    lines := cutLines(c, gc.width - 2*gc.border, gc.font, text)
     height := uint32(len(lines)) * gc.fontHeight
 
     var mask uint32 = xproto.CwBackPixel | xproto.CwOverrideRedirect | xproto.CwEventMask
