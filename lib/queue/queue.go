@@ -135,6 +135,7 @@ func (q *Queue) closeNotif(n *notif) {
     if q.scrs[n.screen] == n {
         q.scrs[n.screen] = n.next
     }
+    n.win.Close()
     q.updatePos(n.screen)
 }
 
